@@ -24,3 +24,39 @@ firebase.database().ref('items').on('value', (snapshot) => {
   }
   document.getElementById('items').innerHTML = html;
 });
+// Store user states (temporary memory)
+const userStates = {};
+
+// Enhanced /lost handler
+bot.onText(/\/lost (.+)/, (msg, match) => {
+  const chatId = msg.chat.id;
+  const description = match[1];
+  
+  // Save description temporarily
+  userStates[chatId] = { description, type: 'lost' };
+  
+  // Ask for location
+  bot.sendMessage(chatId, '📍 Where did you lose this? (e.g., "Library Floor 2")');
+});
+
+// Handle location response
+bot.on('message', (msg) => {
+  const chatId = msg.chat.id;
+  const text = msg.text;
+  
+  // Check if user is in "waiting for location" state
+  if (userStates[chatId] && !text.startsWith('/')) {
+    const { description, type } = userStates[chatId];
+    
+    // Save to Firebase
+    db.ref('items').push({
+      type,
+      description,
+      location: text, // User's location input
+      timestamp: admin.database.ServerValue.TIMESTAMP
+    });
+    
+    bot.sendMessage(chatId, `✅ Reported! View: https://sanvi009.github.io/uni-lost-found-web/`);
+    delete userStates[chatId]; // Clear state
+  }
+});
