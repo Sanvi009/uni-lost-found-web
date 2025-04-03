@@ -60,3 +60,13 @@ bot.on('message', (msg) => {
     delete userStates[chatId]; // Clear state
   }
 });
+// In your Firebase snapshot handler:
+if (!groups[item.category]) groups[item.category] = [];
+groups[item.category].push(item);
+
+// Then render as collapsible sections:
+for (const category in groups) {
+  html += `<details><summary>${category} (${groups[category].length})</summary>`;
+  // ... items ...
+  html += `</details>`;
+}
