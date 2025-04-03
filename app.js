@@ -1,72 +1,53 @@
-// Initialize Firebase (use same config as your bot)
-firebase.initializeApp({
-   apiKey: "AIzaSyD0XqFX58b4n0UI2KprKOhSU3oZDIRtgUE",
+// Initialize Firebase (REPLACE WITH YOUR CONFIG)
+const firebaseConfig = {
+    apiKey: "AIzaSyD0XqFX58b4n0UI2KprKOhSU3oZDIRtgUE",
   authDomain: "unilostfound.firebaseapp.com",
   databaseURL: "https://unilostfound-default-rtdb.firebaseio.com",
   projectId: "unilostfound",
   storageBucket: "unilostfound.firebasestorage.app",
   messagingSenderId: "568935322973",
   appId: "1:568935322973:web:8aae9cf9ebdc5edf1144b4"
-});
+};
+firebase.initializeApp(firebaseConfig);
 
-// Fetch and display items
-firebase.database().ref('items').on('value', (snapshot) => {
-  const items = snapshot.val();
-  let html = '';
-  for (let key in items) {
-    const item = items[key];
-    html += `
-      <div class="item">
-        <strong>${item.type.toUpperCase()}:</strong> 
-        ${item.description} (${new Date(item.timestamp).toLocaleString()})
-      </div>
-    `;
-  }
-  document.getElementById('items').innerHTML = html;
-});
-// Store user states (temporary memory)
-const userStates = {};
+// DOM elements
+const itemsContainer = document.getElementById('items-container');
 
-// Enhanced /lost handler
-bot.onText(/\/lost (.+)/, (msg, match) => {
-  const chatId = msg.chat.id;
-  const description = match[1];
-  
-  // Save description temporarily
-  userStates[chatId] = { description, type: 'lost' };
-  
-  // Ask for location
-  bot.sendMessage(chatId, '📍 Where did you lose this? (e.g., "Library Floor 2")');
-});
-
-// Handle location response
-bot.on('message', (msg) => {
-  const chatId = msg.chat.id;
-  const text = msg.text;
-  
-  // Check if user is in "waiting for location" state
-  if (userStates[chatId] && !text.startsWith('/')) {
-    const { description, type } = userStates[chatId];
+// Real-time data listener
+firebase.database().ref('items').orderByChild('timestamp').on('value', (snapshot) => {
+    itemsContainer.innerHTML = ''; // Clear old items
     
-    // Save to Firebase
-    db.ref('items').push({
-      type,
-      description,
-      location: text, // User's location input
-      timestamp: admin.database.ServerValue.TIMESTAMP
+    const items = snapshot.val();
+    if (!items) {
+        itemsContainer.innerHTML = '<p>No lost/found items reported yet.</p>';
+        return;
+    }
+
+    // Convert object to array and sort by timestamp (newest first)
+    const itemsArray = Object.entries(items).map(([id, item]) => ({ id, ...item }));
+    itemsArray.sort((a, b) => b.timestamp - a.timestamp);
+
+    // Render each item
+    itemsArray.forEach(item => {
+        const itemEl = document.createElement('div');
+        itemEl.className = 'item-card';
+        itemEl.innerHTML = `
+            <div class="item-type">${item.type.toUpperCase()} • ${item.category}</div>
+            <div>${item.description}</div>
+            <div class="item-location">${item.location || 'Location not specified'}</div>
+            <div class="item-time">${formatTime(item.timestamp)}</div>
+        `;
+        itemsContainer.appendChild(itemEl);
     });
-    
-    bot.sendMessage(chatId, `✅ Reported! View: https://sanvi009.github.io/uni-lost-found-web/`);
-    delete userStates[chatId]; // Clear state
-  }
 });
-// In your Firebase snapshot handler:
-if (!groups[item.category]) groups[item.category] = [];
-groups[item.category].push(item);
 
-// Then render as collapsible sections:
-for (const category in groups) {
-  html += `<details><summary>${category} (${groups[category].length})</summary>`;
-  // ... items ...
-  html += `</details>`;
+// Format timestamp
+function formatTime(timestamp) {
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-US', { 
+        month: 'short', 
+        day: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit' 
+    });
 }
